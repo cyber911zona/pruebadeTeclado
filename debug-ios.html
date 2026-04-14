@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Debug iOS Teclado</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: monospace; background: #0a0a0a; color: #00ff88; font-size: 13px; }
+#log { padding: 10px; }
+.row { padding: 4px 0; border-bottom: 1px solid #222; display: flex; justify-content: space-between; }
+.label { color: #888; }
+.val { color: #00ff88; font-weight: bold; }
+.val.changed { color: #ff4444; }
+h2 { color: #fff; padding: 10px; background: #1a1a1a; font-size: 14px; }
+#input-test {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #1a1a2e; padding: 10px;
+  border-top: 2px solid #7c6af7;
+}
+#input-test input {
+  width: 100%; padding: 10px; background: #2a2a3e;
+  color: white; border: 1px solid #7c6af7; border-radius: 8px;
+  font-size: 16px;
+}
+#content { padding-bottom: 80px; }
+.section { margin: 10px; background: #111; border-radius: 8px; overflow: hidden; }
+.event { background: #1a1a00; color: #ffff00; padding: 4px 10px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div id="content">
+  <h2>🔍 Debug iOS Teclado — ZonaEscolar</h2>
+  <p style="padding:8px 10px; color:#888; font-size:11px">Toca el input de abajo y observa los cambios en rojo</p>
+
+  <div class="section">
+    <h2>📐 Viewport</h2>
+    <div id="log-viewport"></div>
+  </div>
+
+  <div class="section">
+    <h2>🎨 CSS Variables</h2>
+    <div id="log-css"></div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Eventos recientes</h2>
+    <div id="log-events"></div>
+  </div>
+
+  <div class="section">
+    <h2>📱 Device Info</h2>
+    <div id="log-device"></div>
+  </div>
+</div>
+
+<div id="input-test">
+  <input type="text" placeholder="👆 Toca aquí para abrir el teclado" id="testInput">
+</div>
+
+<script>
+const prevValues = {};
+
+function row(id, label, value) {
+  let el = document.getElementById('r-' + id);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'row';
+    el.id = 'r-' + id;
+    el.innerHTML = `<span class="label">${label}</span><span class="val" id="v-${id}"></span>`;
+    document.getElementById('log-' + id.split('-')[0]).appendChild(el);
+  }
+  const valEl = document.getElementById('v-' + id);
+  const changed = prevValues[id] !== undefined && prevValues[id] !== String(value);
+  valEl.textContent = value;
+  valEl.className = 'val' + (changed ? ' changed' : '');
+  prevValues[id] = String(value);
+}
+
+function logEvent(msg) {
+  const el = document.createElement('div');
+  el.className = 'event';
+  const t = new Date().toLocaleTimeString('es-MX', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  el.textContent = `[${t}] ${msg}`;
+  const container = document.getElementById('log-events');
+  container.insertBefore(el, container.firstChild);
+  if (container.children.length > 15) container.lastChild.remove();
+}
+
+function getCSSVar(name) {
+  const val = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return val || '(no definida)';
+}
+
+function update() {
+  const vvH = window.visualViewport?.height ?? 'N/A';
+  const vvW = window.visualViewport?.width ?? 'N/A';
+  const vvTop = window.visualViewport?.offsetTop ?? 'N/A';
+  const vvLeft = window.visualViewport?.offsetLeft ?? 'N/A';
+  const iH = window.innerHeight;
+  const iW = window.innerWidth;
+  const sY = window.scrollY;
+  const dH = document.documentElement.clientHeight;
+
+  row('viewport-vvH', 'visualViewport.height', typeof vvH === 'number' ? vvH.toFixed(1) + 'px' : vvH);
+  row('viewport-vvW', 'visualViewport.width', typeof vvW === 'number' ? vvW.toFixed(1) + 'px' : vvW);
+  row('viewport-vvTop', 'visualViewport.offsetTop', typeof vvTop === 'number' ? vvTop.toFixed(1) + 'px' : vvTop);
+  row('viewport-vvLeft', 'visualViewport.offsetLeft', typeof vvLeft === 'number' ? vvLeft.toFixed(1) + 'px' : vvLeft);
+  row('viewport-iH', 'window.innerHeight', iH + 'px');
+  row('viewport-iW', 'window.innerWidth', iW + 'px');
+  row('viewport-sY', 'window.scrollY', sY + 'px');
+  row('viewport-dH', 'document.clientHeight', dH + 'px');
+
+  // CSS vars de ZonaEscolar
+  const vars = [
+    '--chat-h', '--ze-topbar-h', '--ze-bottom-nav-clearance',
+    '--ze-real-vh', '--vvh'
+  ];
+  vars.forEach(v => {
+    row('css-' + v.replace(/--/g,'').replace(/-/g,'_'), v, getCSSVar(v));
+  });
+
+  // Device info
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  row('device-ios', 'Es iOS', isIOS ? '✅ SÍ' : '❌ NO');
+  row('device-vvapi', 'visualViewport API', window.visualViewport ? '✅ Sí' : '❌ No');
+  row('device-ua', 'UserAgent (corto)', navigator.userAgent.substring(0, 60) + '...');
+  row('device-pwa', 'Modo PWA', window.navigator.standalone ? '✅ PWA instalada' : '🌐 Safari normal');
+  row('device-dvh', '1dvh =', CSS.supports('height', '1dvh') ? '✅ soportado' : '❌ no soportado');
+  row('device-svh', '1svh =', CSS.supports('height', '1svh') ? '✅ soportado' : '❌ no soportado');
+}
+
+// Actualizar cada 200ms
+setInterval(update, 200);
+update();
+
+// Log de eventos
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    logEvent(`VV resize → h:${window.visualViewport.height.toFixed(0)}px offsetTop:${window.visualViewport.offsetTop.toFixed(0)}px`);
+  });
+  window.visualViewport.addEventListener('scroll', () => {
+    logEvent(`VV scroll → offsetTop:${window.visualViewport.offsetTop.toFixed(0)}px`);
+  });
+}
+
+window.addEventListener('resize', () => {
+  logEvent(`window resize → innerH:${window.innerHeight}px`);
+});
+
+document.getElementById('testInput').addEventListener('focus', () => {
+  logEvent('INPUT: focus (teclado abriéndose...)');
+});
+document.getElementById('testInput').addEventListener('blur', () => {
+  logEvent('INPUT: blur (teclado cerrándose...)');
+});
+</script>
+</body>
+</html>
